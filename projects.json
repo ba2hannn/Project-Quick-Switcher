@@ -1,0 +1,26 @@
+[
+  {
+    "name": "My Web App",
+    "path": "/home/user/projects/my-web-app",
+    "editor_command": "code",
+    "agent_command": "claude"
+  },
+  {
+    "name": "API Server",
+    "path": "/home/user/projects/api-server",
+    "editor_command": "code",
+    "agent_command": "claude"
+  },
+  {
+    "name": "GNOME Extension",
+    "path": "/home/user/projects/gnome-extension",
+    "editor_command": "code",
+    "agent_command": "claude"
+  },
+  {
+    "name": "Dotfiles",
+    "path": "/home/user/.dotfiles",
+    "editor_command": "vim",
+    "agent_command": ""
+  }
+]
