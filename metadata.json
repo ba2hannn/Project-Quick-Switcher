@@ -2,7 +2,7 @@
   "uuid": "project-quick-switcher@ba2hann.github.com",
   "name": "Project Quick Switcher",
   "description": "Quickly switch between projects and launch editors or AI agents from the GNOME panel.",
-  "shell-version": ["46"],
+  "shell-version": ["46", "47", "48", "49", "50"],
   "url": "https://github.com/ba2hannn/Project-Quick-Switcher",
   "hasPrefs": true
 }
