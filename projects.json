@@ -1,26 +1,62 @@
-[
-  {
-    "name": "My Web App",
-    "path": "/home/user/projects/my-web-app",
-    "editor_command": "code",
-    "agent_command": "claude"
-  },
-  {
-    "name": "API Server",
-    "path": "/home/user/projects/api-server",
-    "editor_command": "code",
-    "agent_command": "claude"
-  },
-  {
-    "name": "GNOME Extension",
-    "path": "/home/user/projects/gnome-extension",
-    "editor_command": "code",
-    "agent_command": "claude"
-  },
-  {
-    "name": "Dotfiles",
-    "path": "/home/user/.dotfiles",
-    "editor_command": "vim",
-    "agent_command": ""
-  }
-]
+{
+  "projects": [
+    {
+      "name": "Mercan Adisyon",
+      "path": "/home/ba2hann/MercanAdisyon",
+      "icon": "folder-symbolic",
+      "actions": [
+        {
+          "label": "VS Code",
+          "icon": "text-editor-symbolic",
+          "steps": [
+            {
+              "command": "code .",
+              "terminal": false
+            }
+          ]
+        },
+        {
+          "label": "Claude",
+          "icon": "applications-science-symbolic",
+          "steps": [
+            {
+              "command": "claude",
+              "terminal": true
+            }
+          ]
+        },
+        {
+          "label": "Docker Start (MercanAdisyon_db)",
+          "icon": "system-run-symbolic",
+          "steps": [
+            {
+              "command": "docker start MercanAdisyon_db",
+              "terminal": false
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "name": "Mercan Adisyon",
+      "icon": "system-users-symbolic",
+      "workspace": "new",
+      "action_refs": [
+        {
+          "project": "Mercan Adisyon",
+          "action_label": "VS Code"
+        },
+        {
+          "project": "Mercan Adisyon",
+          "action_label": "Claude"
+        },
+        {
+          "project": "Mercan Adisyon",
+          "action_label": "Docker Start (MercanAdisyon_db)"
+        }
+      ]
+    }
+  ]
+}
