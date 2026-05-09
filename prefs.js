@@ -22,6 +22,17 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
         this._groupPages = [];
         this._window = window;
 
+        window.connect('close-request', () => {
+            if (this._autoSaveId) {
+                GLib.source_remove(this._autoSaveId);
+                this._autoSaveId = 0;
+            }
+            this._listGroup = null;
+            this._groupsListGroup = null;
+            this._projectPages = [];
+            this._groupPages = [];
+        });
+
         this._loadData();
 
         // --- Projects Overview Page ---

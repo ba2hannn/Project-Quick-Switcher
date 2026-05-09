@@ -19,6 +19,10 @@ export default class ProjectQuickSwitcherExtension extends Extension {
             this._reloadTimeoutId = null;
         }
         if (this._fileMonitor) {
+            if (this._fileMonitorHandlerId) {
+                this._fileMonitor.disconnect(this._fileMonitorHandlerId);
+                this._fileMonitorHandlerId = null;
+            }
             this._fileMonitor.cancel();
             this._fileMonitor = null;
         }
@@ -34,7 +38,7 @@ export default class ProjectQuickSwitcherExtension extends Extension {
             Gio.FileMonitorFlags.WATCH_MOVES,
             null
         );
-        this._fileMonitor.connect('changed', (monitor, file, otherFile, eventType) => {
+        this._fileMonitorHandlerId = this._fileMonitor.connect('changed', (monitor, file, otherFile, eventType) => {
             if (eventType === Gio.FileMonitorEvent.ATTRIBUTE_CHANGED ||
                 eventType === Gio.FileMonitorEvent.PRE_UNMOUNT ||
                 eventType === Gio.FileMonitorEvent.UNMOUNTED)

@@ -13,6 +13,7 @@ class ProjectQuickSwitcher extends PanelMenu.Button {
     _init(extension) {
         super._init(0.0, 'Project Quick Switcher');
         this._extension = extension;
+        this._loadGeneration = 0;
 
         const icon = new St.Icon({
             icon_name: 'folder-symbolic',
@@ -28,91 +29,101 @@ class ProjectQuickSwitcher extends PanelMenu.Button {
     }
 
     _loadProjects() {
+        this._loadGeneration++;
+        const generation = this._loadGeneration;
+
         this.menu.removeAll();
 
-        try {
-            const file = Gio.File.new_for_path(this._getProjectsFilePath());
-            const [success, contents] = file.load_contents(null);
-            if (!success) {
-                this._addEmptyState();
-                return;
-            }
+        const file = Gio.File.new_for_path(this._getProjectsFilePath());
+        file.load_contents_async(null, (sourceObject, result) => {
+            if (generation !== this._loadGeneration) return;
 
-            const raw = JSON.parse(new TextDecoder().decode(contents));
-            const data = normalizeData(raw);
-            const projects = data.projects;
-            const groups = data.groups;
-
-            if (!projects || projects.length === 0) {
-                this._addEmptyState();
-                return;
-            }
-
-            for (const project of projects) {
-                const submenu = new PopupMenu.PopupSubMenuMenuItem(project.name || 'Unnamed');
-
-                const actions = project.actions || [];
-                if (actions.length === 0) {
-                    const emptyItem = new PopupMenu.PopupMenuItem('  No actions');
-                    emptyItem.sensitive = false;
-                    submenu.menu.addMenuItem(emptyItem);
-                } else {
-                    for (const action of actions) {
-                        const item = new PopupMenu.PopupImageMenuItem(
-                            action.label || 'Command',
-                            action.icon || 'system-run-symbolic'
-                        );
-                        item.connect('activate', () => {
-                            const steps = action.steps || [];
-                            const workingDir = project.path || null;
-                            if (steps.length > 0) {
-                                for (const step of steps)
-                                    this._runCommand(step.command, workingDir, step.terminal);
-                            } else if (action.command) {
-                                this._runCommand(action.command, workingDir, action.terminal);
-                            }
-                        });
-                        submenu.menu.addMenuItem(item);
-                    }
+            try {
+                const [success, contents] = sourceObject.load_contents_finish(result);
+                if (!success) {
+                    this._addEmptyState();
+                    return;
                 }
 
-                const projectGroups = (groups || []).filter(g =>
-                    (g.action_refs || []).some(r => r.project === project.name));
-                if (projectGroups.length > 0) {
-                    submenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-                    for (const group of projectGroups) {
-                        const groupItem = new PopupMenu.PopupImageMenuItem(
-                            group.name || 'Unnamed Group',
-                            group.icon || 'system-users-symbolic'
-                        );
-                        groupItem.connect('activate', () => {
-                            this._runGroup(group, projects);
-                        });
-                        submenu.menu.addMenuItem(groupItem);
-                    }
+                const raw = JSON.parse(new TextDecoder().decode(contents));
+                const data = normalizeData(raw);
+                const projects = data.projects;
+                const groups = data.groups;
+
+                if (!projects || projects.length === 0) {
+                    this._addEmptyState();
+                    return;
                 }
 
-                this.menu.addMenuItem(submenu);
+                this._buildMenu(projects, groups);
+            } catch (e) {
+                log(`Project Quick Switcher: ${e.message}`);
+                const errorItem = new PopupMenu.PopupMenuItem('Failed to load projects.json');
+                errorItem.sensitive = false;
+                this.menu.addMenuItem(errorItem);
+            }
+        });
+    }
+
+    _buildMenu(projects, groups) {
+        for (const project of projects) {
+            const submenu = new PopupMenu.PopupSubMenuMenuItem(project.name || 'Unnamed');
+
+            const actions = project.actions || [];
+            if (actions.length === 0) {
+                const emptyItem = new PopupMenu.PopupMenuItem('  No actions');
+                emptyItem.sensitive = false;
+                submenu.menu.addMenuItem(emptyItem);
+            } else {
+                for (const action of actions) {
+                    const item = new PopupMenu.PopupImageMenuItem(
+                        action.label || 'Command',
+                        action.icon || 'system-run-symbolic'
+                    );
+                    item.connect('activate', () => {
+                        const steps = action.steps || [];
+                        const workingDir = project.path || null;
+                        if (steps.length > 0) {
+                            for (const step of steps)
+                                this._runCommand(step.command, workingDir, step.terminal);
+                        } else if (action.command) {
+                            this._runCommand(action.command, workingDir, action.terminal);
+                        }
+                    });
+                    submenu.menu.addMenuItem(item);
+                }
             }
 
-            this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-
-            const settingsItem = new PopupMenu.PopupMenuItem('Settings');
-            settingsItem.connect('activate', () => {
-                try {
-                    this._extension.openPreferences();
-                } catch (e) {
-                    log(`Project Quick Switcher: ${e.message}`);
+            const projectGroups = (groups || []).filter(g =>
+                (g.action_refs || []).some(r => r.project === project.name));
+            if (projectGroups.length > 0) {
+                submenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+                for (const group of projectGroups) {
+                    const groupItem = new PopupMenu.PopupImageMenuItem(
+                        group.name || 'Unnamed Group',
+                        group.icon || 'system-users-symbolic'
+                    );
+                    groupItem.connect('activate', () => {
+                        this._runGroup(group, projects);
+                    });
+                    submenu.menu.addMenuItem(groupItem);
                 }
-            });
-            this.menu.addMenuItem(settingsItem);
+            }
 
-        } catch (e) {
-            log(`Project Quick Switcher: ${e.message}`);
-            const errorItem = new PopupMenu.PopupMenuItem('Failed to load projects.json');
-            errorItem.sensitive = false;
-            this.menu.addMenuItem(errorItem);
+            this.menu.addMenuItem(submenu);
         }
+
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+        const settingsItem = new PopupMenu.PopupMenuItem('Settings');
+        settingsItem.connect('activate', () => {
+            try {
+                this._extension.openPreferences();
+            } catch (e) {
+                log(`Project Quick Switcher: ${e.message}`);
+            }
+        });
+        this.menu.addMenuItem(settingsItem);
     }
 
     _addEmptyState() {
