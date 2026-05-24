@@ -14,6 +14,7 @@ class ProjectQuickSwitcher extends PanelMenu.Button {
         super._init(0.0, 'Project Quick Switcher');
         this._extension = extension;
         this._loadGeneration = 0;
+        this._settings = { auto_install_missing_tools: false };
 
         const icon = new St.Icon({
             icon_name: 'folder-symbolic',
@@ -49,6 +50,7 @@ class ProjectQuickSwitcher extends PanelMenu.Button {
                 const data = normalizeData(raw);
                 const projects = data.projects;
                 const groups = data.groups;
+                this._settings = data.settings || { auto_install_missing_tools: false };
 
                 if (!projects || projects.length === 0) {
                     this._addEmptyState();
@@ -85,7 +87,7 @@ class ProjectQuickSwitcher extends PanelMenu.Button {
                         const workingDir = project.path || null;
                         if (steps.length > 0) {
                             for (const step of steps)
-                                this._runCommand(step.command, workingDir, step.terminal);
+                                this._runStep(step, workingDir);
                         } else if (action.command) {
                             this._runCommand(action.command, workingDir, action.terminal);
                         }
@@ -158,11 +160,35 @@ class ProjectQuickSwitcher extends PanelMenu.Button {
             const workingDir = project.path || null;
             if (steps.length > 0) {
                 for (const step of steps)
-                    this._runCommand(step.command, workingDir, step.terminal);
+                    this._runStep(step, workingDir);
             } else if (action.command) {
                 this._runCommand(action.command, workingDir, action.terminal);
             }
         }
+    }
+
+    _runStep(step, workingDir) {
+        if (!step || !step.command)
+            return;
+
+        const installPrefix = this._buildInstallPrefix(step);
+        const command = installPrefix ? `${installPrefix}; ${step.command}` : step.command;
+        this._runCommand(command, workingDir, step.terminal);
+    }
+
+    _buildInstallPrefix(step) {
+        if (!this._settings?.auto_install_missing_tools)
+            return '';
+        const requires = step.requires;
+        if (!requires?.bin || !requires?.install)
+            return '';
+
+        const bin = this._escapeSingleQuotes(requires.bin);
+        return `if ! command -v '${bin}' >/dev/null 2>&1; then ${requires.install}; fi`;
+    }
+
+    _escapeSingleQuotes(text) {
+        return `${text ?? ''}`.replace(/'/g, "'\\''");
     }
 
     _switchToWorkspace(workspace) {
@@ -189,7 +215,10 @@ class ProjectQuickSwitcher extends PanelMenu.Button {
     _runCommand(command, workingDir, inTerminal) {
         try {
             if (inTerminal) {
-                const wrapped = `cd '${workingDir}' 2>/dev/null; ${command}; exec bash`;
+                const workPrefix = workingDir
+                    ? `cd '${this._escapeSingleQuotes(workingDir)}' 2>/dev/null; `
+                    : '';
+                const wrapped = `${workPrefix}${command}; exec bash`;
                 GLib.spawn_async(
                     null,
                     ['gnome-terminal', '--', 'bash', '-c', wrapped],

@@ -12,6 +12,7 @@ import { GroupEditorPage } from './src/groupEditorPage.js';
 export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
     _projectPages = [];
     _groupPages = [];
+    _settingsData = { auto_install_missing_tools: false };
     _autoSaveId = 0;
 
     fillPreferencesWindow(window) {
@@ -29,22 +30,58 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
             }
             this._listGroup = null;
             this._groupsListGroup = null;
+            this._projectsOverviewPage = null;
+            this._groupsOverviewPage = null;
             this._projectPages = [];
             this._groupPages = [];
+            this._settingsData = { auto_install_missing_tools: false };
         });
 
         this._loadData();
 
         // --- Projects Overview Page ---
-        const overviewPage = new Adw.PreferencesPage({
+        this._projectsOverviewPage = new Adw.PreferencesPage({
             title: 'Projects',
             icon_name: 'folder-symbolic',
         });
+        this._listGroup = null;
+        window.add(this._projectsOverviewPage);
 
-        this._listGroup = new Adw.PreferencesGroup({
+        for (const data of this._projectsData)
+            this._addProjectPage(window, data);
+
+        this._refreshList();
+
+        // --- Groups Page ---
+        this._groupsOverviewPage = new Adw.PreferencesPage({
+            title: 'Groups',
+            icon_name: 'system-users-symbolic',
+        });
+        this._groupsListGroup = null;
+        window.add(this._groupsOverviewPage);
+
+        for (const gData of this._groupsData)
+            this._addGroupPage(window, gData);
+
+        this._refreshGroupList();
+    }
+
+    _createProjectsListGroup(window) {
+        const listGroup = new Adw.PreferencesGroup({
             title: 'Your Projects',
             description: 'Click a project to edit its actions and settings.',
         });
+
+        const autoInstallRow = new Adw.SwitchRow({
+            title: 'Auto-install missing tools for Quick Actions',
+            subtitle: 'When enabled, preset actions can install missing CLI tools before running.',
+            active: !!this._settingsData.auto_install_missing_tools,
+        });
+        autoInstallRow.connect('notify::active', () => {
+            this._settingsData.auto_install_missing_tools = autoInstallRow.active;
+            this._scheduleAutoSave(window);
+        });
+        listGroup.add(autoInstallRow);
 
         const addButton = new Gtk.Button({
             icon_name: 'list-add-symbolic',
@@ -53,23 +90,13 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
             tooltip_text: 'Add a new project',
         });
         addButton.connect('clicked', () => this._addProject(window));
-        this._listGroup.set_header_suffix(addButton);
+        listGroup.set_header_suffix(addButton);
 
-        overviewPage.add(this._listGroup);
-        window.add(overviewPage);
+        return listGroup;
+    }
 
-        for (const data of this._projectsData)
-            this._addProjectPage(window, data);
-
-        this._refreshList();
-
-        // --- Groups Page ---
-        const groupsPage = new Adw.PreferencesPage({
-            title: 'Groups',
-            icon_name: 'system-users-symbolic',
-        });
-
-        this._groupsListGroup = new Adw.PreferencesGroup({
+    _createGroupsListGroup(window) {
+        const groupsListGroup = new Adw.PreferencesGroup({
             title: 'Your Groups',
             description: 'Groups run multiple actions from different projects at once. Optionally on a specific workspace.',
         });
@@ -81,15 +108,9 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
             tooltip_text: 'Add a new group',
         });
         addGroupButton.connect('clicked', () => this._addGroup(window));
-        this._groupsListGroup.set_header_suffix(addGroupButton);
+        groupsListGroup.set_header_suffix(addGroupButton);
 
-        groupsPage.add(this._groupsListGroup);
-        window.add(groupsPage);
-
-        for (const gData of this._groupsData)
-            this._addGroupPage(window, gData);
-
-        this._refreshGroupList();
+        return groupsListGroup;
     }
 
     _getProjectsFilePath() {
@@ -105,11 +126,13 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
                 const normalized = normalizeData(raw);
                 this._projectsData = normalized.projects;
                 this._groupsData = normalized.groups;
+                this._settingsData = normalized.settings;
                 return;
             }
         } catch (_e) { }
         this._projectsData = [];
         this._groupsData = [];
+        this._settingsData = { auto_install_missing_tools: false };
     }
 
     _scheduleAutoSave(window) {
@@ -125,9 +148,10 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
     _doSave(window) {
         const projects = this._projectPages.map(p => p.getProjectData());
         const groups = this._groupPages.map(g => g.getGroupData());
+        const settings = { ...this._settingsData };
 
         try {
-            const json = JSON.stringify({ projects, groups }, null, 2);
+            const json = JSON.stringify({ projects, groups, settings }, null, 2);
             const file = Gio.File.new_for_path(this._getProjectsFilePath());
             file.replace_contents(
                 new TextEncoder().encode(json),
@@ -137,6 +161,8 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
                 null
             );
 
+            this._refreshList();
+            this._refreshGroupList();
             window.add_toast(new Adw.Toast({ title: 'Saved', timeout: 2 }));
         } catch (e) {
             log(`Project Quick Switcher: Save failed: ${e.message}`);
@@ -144,9 +170,36 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
         }
     }
 
+    _getCurrentProjectsData() {
+        return this._projectPages.map(p => p.getProjectData());
+    }
+
+    _showEditorPage(page) {
+        if (!this._window)
+            return;
+        if (typeof this._window.present_subpage === 'function')
+            this._window.present_subpage(page);
+        else
+            this._window.set_visible_page(page);
+    }
+
+    _closeEditorPage(fallbackPage) {
+        if (!this._window)
+            return;
+        if (typeof this._window.close_subpage === 'function')
+            this._window.close_subpage();
+        else if (fallbackPage)
+            this._window.set_visible_page(fallbackPage);
+    }
+
     _addProjectPage(window, data) {
-        const page = new ProjectPage(data, () => this._scheduleAutoSave(window));
-        window.add(page);
+        const page = new ProjectPage(data, () => {
+            this._refreshList();
+            this._refreshGroupList();
+            this._scheduleAutoSave(window);
+        }, () => this._closeEditorPage(this._projectsOverviewPage));
+        if (typeof window.present_subpage !== 'function')
+            window.add(page);
         this._projectPages.push(page);
         return page;
     }
@@ -155,26 +208,25 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
         const newData = { name: 'New Project', path: '', icon: 'folder-symbolic', actions: [] };
         const page = this._addProjectPage(window, newData);
         this._refreshList();
-        window.set_visible_page(page);
+        this._showEditorPage(page);
     }
 
     _removeProject(window, pageRef) {
         const idx = this._projectPages.indexOf(pageRef);
         if (idx === -1) return;
         this._projectPages.splice(idx, 1);
-        window.remove(pageRef);
+        if (typeof window.present_subpage !== 'function')
+            window.remove(pageRef);
         this._refreshList();
         this._doSave(window);
     }
 
     _refreshList() {
-        let child = this._listGroup.get_first_child();
-        while (child) {
-            const next = child.get_next_sibling();
-            if (child instanceof Adw.ActionRow || child instanceof Adw.ExpanderRow)
-                this._listGroup.remove(child);
-            child = next;
-        }
+        if (!this._projectsOverviewPage || !this._window)
+            return;
+        if (this._listGroup)
+            this._projectsOverviewPage.remove(this._listGroup);
+        this._listGroup = this._createProjectsListGroup(this._window);
 
         if (this._projectPages.length === 0) {
             const emptyRow = new Adw.ActionRow({
@@ -183,6 +235,7 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
             });
             emptyRow.sensitive = false;
             this._listGroup.add(emptyRow);
+            this._projectsOverviewPage.add(this._listGroup);
             return;
         }
 
@@ -217,7 +270,7 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
 
             const pageRef = page;
             row.connect('activated', () => {
-                row.get_root().set_visible_page(pageRef);
+                this._showEditorPage(pageRef);
             });
 
             const deleteButton = new Gtk.Button({
@@ -227,19 +280,25 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
                 tooltip_text: 'Delete this project',
             });
             deleteButton.connect('clicked', () => {
-                this._removeProject(row.get_root(), pageRef);
+                this._removeProject(this._window, pageRef);
             });
             row.add_suffix(deleteButton);
 
             this._listGroup.add(row);
         }
+
+        this._projectsOverviewPage.add(this._listGroup);
     }
 
     // --- Groups ---
 
     _addGroupPage(window, data) {
-        const page = new GroupEditorPage(data, this._projectsData, () => this._scheduleAutoSave(window));
-        window.add(page);
+        const page = new GroupEditorPage(data, this._getCurrentProjectsData(), () => {
+            this._refreshGroupList();
+            this._scheduleAutoSave(window);
+        }, () => this._closeEditorPage(this._groupsOverviewPage));
+        if (typeof window.present_subpage !== 'function')
+            window.add(page);
         this._groupPages.push(page);
         return page;
     }
@@ -248,26 +307,25 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
         const newData = { name: 'New Group', icon: 'system-users-symbolic', action_refs: [] };
         const page = this._addGroupPage(window, newData);
         this._refreshGroupList();
-        window.set_visible_page(page);
+        this._showEditorPage(page);
     }
 
     _removeGroup(window, pageRef) {
         const idx = this._groupPages.indexOf(pageRef);
         if (idx === -1) return;
         this._groupPages.splice(idx, 1);
-        window.remove(pageRef);
+        if (typeof window.present_subpage !== 'function')
+            window.remove(pageRef);
         this._refreshGroupList();
         this._doSave(window);
     }
 
     _refreshGroupList() {
-        let child = this._groupsListGroup.get_first_child();
-        while (child) {
-            const next = child.get_next_sibling();
-            if (child instanceof Adw.ActionRow || child instanceof Adw.ExpanderRow)
-                this._groupsListGroup.remove(child);
-            child = next;
-        }
+        if (!this._groupsOverviewPage || !this._window)
+            return;
+        if (this._groupsListGroup)
+            this._groupsOverviewPage.remove(this._groupsListGroup);
+        this._groupsListGroup = this._createGroupsListGroup(this._window);
 
         if (this._groupPages.length === 0) {
             const emptyRow = new Adw.ActionRow({
@@ -276,6 +334,7 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
             });
             emptyRow.sensitive = false;
             this._groupsListGroup.add(emptyRow);
+            this._groupsOverviewPage.add(this._groupsListGroup);
             return;
         }
 
@@ -310,7 +369,7 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
 
             const pageRef = page;
             row.connect('activated', () => {
-                row.get_root().set_visible_page(pageRef);
+                this._showEditorPage(pageRef);
             });
 
             const deleteButton = new Gtk.Button({
@@ -320,11 +379,13 @@ export default class ProjectQuickSwitcherPrefs extends ExtensionPreferences {
                 tooltip_text: 'Delete this group',
             });
             deleteButton.connect('clicked', () => {
-                this._removeGroup(row.get_root(), pageRef);
+                this._removeGroup(this._window, pageRef);
             });
             row.add_suffix(deleteButton);
 
             this._groupsListGroup.add(row);
         }
+
+        this._groupsOverviewPage.add(this._groupsListGroup);
     }
 }

@@ -4,13 +4,14 @@ import GObject from 'gi://GObject';
 
 export const GroupEditorPage = GObject.registerClass(
 class GroupEditorPage extends Adw.PreferencesPage {
-    _init(groupData = {}, projectsData, onSave) {
+    _init(groupData = {}, projectsData, onSave, onBack = null) {
         super._init({
             title: groupData.name || 'New Group',
             icon_name: groupData.icon || 'system-users-symbolic',
         });
 
         this._onSave = onSave;
+        this._onBack = onBack;
         this._checkButtons = [];
 
         this.groupData = {
@@ -22,6 +23,21 @@ class GroupEditorPage extends Adw.PreferencesPage {
         const existingRefs = (groupData.action_refs || []).map(
             r => `${r.project}::${r.action_label}`
         );
+
+        if (this._onBack) {
+            const navGroup = new Adw.PreferencesGroup();
+            const backRow = new Adw.ActionRow({
+                title: 'Back to Groups',
+                activatable: true,
+            });
+            backRow.add_prefix(new Gtk.Image({
+                icon_name: 'go-previous-symbolic',
+                valign: Gtk.Align.CENTER,
+            }));
+            backRow.connect('activated', () => this._onBack?.());
+            navGroup.add(backRow);
+            this.add(navGroup);
+        }
 
         const infoGroup = new Adw.PreferencesGroup({
             title: 'Group Info',

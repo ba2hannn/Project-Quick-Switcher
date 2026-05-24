@@ -26,7 +26,8 @@ You can also create **Groups** — bundles of actions from different projects th
 - **Multi-step actions** — Chain multiple commands in a single action
 - **Groups** — Run actions from multiple projects at once, optionally on a specific workspace
 - **Terminal support** — Toggle any step to run in a terminal that stays open
-- **Quick-add presets** — One-click presets for VS Code, Claude, Aider, Docker, Git, and more
+- **Quick-add presets** — Rich preset library for IDEs, AI agents, Git, Node, Python, Docker, and terminal tools
+- **Optional auto-install** — Toggle to auto-install missing CLI tools used by preset actions
 - **Live reload** — Changes are reflected instantly, no restart needed
 - **Modern UI** — Native Adwaita/GTK 4 preferences window with auto-save
 - **Zero dependencies** — Pure GNOME JS (GJS), no Node, no build step
@@ -102,7 +103,10 @@ Everything is configurable through the GUI. You can also edit `projects.json` by
         { "project": "My Web App", "action_label": "Docker Up" }
       ]
     }
-  ]
+  ],
+  "settings": {
+    "auto_install_missing_tools": false
+  }
 }
 ```
 
@@ -129,6 +133,13 @@ Everything is configurable through the GUI. You can also edit `projects.json` by
 |---|---|---|
 | `command` | Shell command to run | — |
 | `terminal` | Run in a terminal that stays open | `false` |
+| `requires` | Optional `{ bin, install }` metadata for auto-install flow | `null` |
+
+### Settings Fields
+
+| Field | Description | Default |
+|---|---|---|
+| `auto_install_missing_tools` | Auto-install missing tools for Quick Action presets | `false` |
 
 ### Group Fields
 
@@ -141,17 +152,17 @@ Everything is configurable through the GUI. You can also edit `projects.json` by
 
 ### Quick-Add Presets
 
-Available in the preferences window under **Quick Actions**:
+Available in the preferences window under **Quick Actions**. The list is intentionally broad and includes IDE, agent, Git, Docker, JS, Python, and terminal-focused presets.
 
 | Category | Preset | Command |
 |---|---|---|
-| Editors | VS Code | `code .` |
-| AI Tools | Claude | `claude` |
-| AI Tools | Aider | `aider` |
+| IDEs & Editors | VS Code | `code .` |
+| AI Agents | Claude | `claude` |
+| AI Agents | OpenAI Codex CLI | `codex` |
 | Docker | Docker Up | `docker compose up -d` |
-| Docker | Docker Start | `docker start <name>` |
-| Terminal | Terminal | `exec bash` |
-| Git | Git Pull | `git pull` |
+| Node / JS | pnpm dev | `pnpm dev` |
+| Python | pytest | `pytest -q` |
+| Terminal Tools | tmux (attach/new) | `tmux new -A -s dev` |
 
 ## Development
 
@@ -177,7 +188,7 @@ src/
   actionRow.js        Action row widget
   stepRow.js          Step row widget
   normalize.js        Shared data normalization
-projects.json         User data (projects + groups)
+projects.json         User data (projects + groups + settings)
 ```
 
 ## License

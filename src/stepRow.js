@@ -16,6 +16,7 @@ class StepRow extends Adw.ActionRow {
         this.stepData = {
             command: data.command || '',
             terminal: data.terminal || false,
+            requires: data.requires ? { ...data.requires } : null,
         };
 
         const commandBox = new Gtk.Box({
